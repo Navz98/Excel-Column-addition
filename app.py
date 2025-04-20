@@ -55,15 +55,16 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         st.markdown("---")
         st.subheader("📊 Table with Editable Dropdown Column")
 
+        # --- Hide columns selection ---
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
-        visible_df = edited_df.drop(columns=hide_columns)
 
-        # --- Ag-Grid ---
-        gb = GridOptionsBuilder.from_dataframe(visible_df)
+        # --- Configure Ag-Grid ---
+        gb = GridOptionsBuilder.from_dataframe(edited_df)
         gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)
         gb.configure_grid_options(suppressMovableColumns=False)
 
-        if new_col_name in visible_df.columns:
+        # Set dropdown column as editable with dropdown options
+        if new_col_name in edited_df.columns:
             gb.configure_column(
                 new_col_name,
                 editable=True,
@@ -72,8 +73,12 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
                 singleClickEdit=True
             )
 
+        # Apply column hiding
+        for col in hide_columns:
+            gb.configure_column(col, hide=True)
+
         grid_response = AgGrid(
-            visible_df,
+            edited_df,
             gridOptions=gb.build(),
             height=500,
             update_mode=GridUpdateMode.MANUAL,
@@ -82,10 +87,8 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             theme="streamlit"
         )
 
-        # ✅ Properly update entire dataframe with all edits
-        updated_data = pd.DataFrame(grid_response["data"])
-        for col in updated_data.columns:
-            st.session_state.edited_df[col] = updated_data[col]
+        # ✅ Save updates to session
+        st.session_state.edited_df = pd.DataFrame(grid_response["data"])
 
         # --- Download Excel ---
         buffer = BytesIO()
@@ -93,7 +96,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             st.session_state.edited_df.to_excel(writer, index=False)
 
         st.download_button(
-            "📅 Download Updated Excel",
+            "📥 Download Updated Excel",
             data=buffer.getvalue(),
             file_name="updated_mapping.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
