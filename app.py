@@ -48,7 +48,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
 
         edited_df = st.session_state.edited_df.copy()
         edited_df.fillna("", inplace=True)
-        edited_df[new_col_name] = edited_df[new_col_name].astype(str)  # Ensure column is string
+        edited_df[new_col_name] = edited_df[new_col_name].astype(str)
 
         st.markdown("---")
         st.subheader("📊 Table with Editable Dropdown Column")
@@ -58,16 +58,14 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
 
         # --- Ag-Grid ---
         gb = GridOptionsBuilder.from_dataframe(visible_df)
-        gb.configure_default_column(editable=False, resizable=True, sortable=True)
+        gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)  # Enable filters on all columns
         gb.configure_grid_options(suppressMovableColumns=False)
 
         gb.configure_column(
             new_col_name,
             editable=True,
             cellEditor="agSelectCellEditor",
-            cellEditorParams={
-                "values": dropdown_values
-            },
+            cellEditorParams={"values": dropdown_values},
             singleClickEdit=True
         )
 
@@ -81,8 +79,9 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             theme="streamlit"
         )
 
-        # Save edits
-        st.session_state.edited_df[visible_df.columns] = grid_response["data"]
+        # Save edits for all columns shown
+        for col in visible_df.columns:
+            st.session_state.edited_df[col] = grid_response["data"][col]
 
         # --- Download Excel ---
         buffer = BytesIO()
