@@ -61,13 +61,14 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)  # Enable filters on all columns
         gb.configure_grid_options(suppressMovableColumns=False)
 
-        gb.configure_column(
-            new_col_name,
-            editable=True,
-            cellEditor="agSelectCellEditor",
-            cellEditorParams={"values": dropdown_values},
-            singleClickEdit=True
-        )
+        if new_col_name in visible_df.columns:
+            gb.configure_column(
+                new_col_name,
+                editable=True,
+                cellEditor="agSelectCellEditor",
+                cellEditorParams={"values": dropdown_values},
+                singleClickEdit=True
+            )
 
         grid_response = AgGrid(
             visible_df,
@@ -79,8 +80,8 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             theme="streamlit"
         )
 
-        # Save edits for all columns shown
-        for col in visible_df.columns:
+        # ✅ Properly update entire dataframe with all edits
+        for col in grid_response["data"].columns:
             st.session_state.edited_df[col] = grid_response["data"][col]
 
         # --- Download Excel ---
@@ -89,7 +90,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             st.session_state.edited_df.to_excel(writer, index=False)
 
         st.download_button(
-            "📥 Download Updated Excel",
+            "📅 Download Updated Excel",
             data=buffer.getvalue(),
             file_name="updated_mapping.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
