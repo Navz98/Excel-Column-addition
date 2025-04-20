@@ -53,9 +53,8 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         st.subheader("📊 Interactive Table with Dropdowns")
 
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
-        visible_df = edited_df.drop(columns=hide_columns)
 
-        gb = GridOptionsBuilder.from_dataframe(visible_df)
+        gb = GridOptionsBuilder.from_dataframe(edited_df)
         gb.configure_pagination(enabled=True)
         gb.configure_default_column(editable=False, resizable=True)
 
@@ -64,8 +63,10 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
 
         grid_options = gb.build()
 
+        visible_cols = [col for col in edited_df.columns if col not in hide_columns]
+
         grid_response = AgGrid(
-            visible_df,
+            edited_df[visible_cols],
             gridOptions=grid_options,
             update_mode=GridUpdateMode.VALUE_CHANGED,
             fit_columns_on_grid_load=True,
