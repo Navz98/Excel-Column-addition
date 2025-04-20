@@ -60,12 +60,17 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         gb.configure_default_column(editable=False, resizable=True, sortable=True)
         gb.configure_grid_options(suppressMovableColumns=False)
 
-        # Editable dropdown in new column
+        # Editable dropdown in new column with single-click edit and autocomplete
         gb.configure_column(
             new_col_name,
             editable=True,
-            cellEditor="agSelectCellEditor",
-            cellEditorParams={"values": dropdown_values}
+            cellEditor="agRichSelectCellEditor",
+            cellEditorParams={
+                "values": dropdown_values,
+                "cellEditorPopup": True,
+                "searchType": "fuzzy"
+            },
+            singleClickEdit=True
         )
 
         grid_response = AgGrid(
