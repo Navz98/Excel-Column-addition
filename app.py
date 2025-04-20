@@ -40,13 +40,13 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
     sec_col_selected = st.selectbox("Choose Secondary Column for Dropdown Values", sec_col_options)
 
     if new_col_name and sec_col_selected:
-        dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().unique().tolist()
+        dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
 
-        edited_df = st.session_state.df_main.copy()
+        if "edited_df" not in st.session_state or new_col_name not in st.session_state.edited_df.columns:
+            st.session_state.edited_df = st.session_state.df_main.copy()
+            st.session_state.edited_df[new_col_name] = ""
 
-        if new_col_name not in edited_df.columns:
-            edited_df[new_col_name] = ""
-
+        edited_df = st.session_state.edited_df.copy()
         edited_df.fillna("", inplace=True)
 
         st.markdown("---")
@@ -60,15 +60,14 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         gb.configure_default_column(editable=False, resizable=True, sortable=True)
         gb.configure_grid_options(suppressMovableColumns=False)
 
-        # Editable dropdown in new column with single-click edit and autocomplete
+        # Editable dropdown in new column with fallback to text input
         gb.configure_column(
             new_col_name,
             editable=True,
             cellEditor="agRichSelectCellEditor",
             cellEditorParams={
                 "values": dropdown_values,
-                "cellEditorPopup": True,
-                "searchType": "fuzzy"
+                "cellEditorPopup": True
             },
             singleClickEdit=True
         )
@@ -84,12 +83,12 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         )
 
         # Update edited_df with changes
-        edited_df[visible_df.columns] = grid_response["data"]
+        st.session_state.edited_df[visible_df.columns] = grid_response["data"]
 
         # --- Download Updated Excel ---
         buffer = BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            edited_df.to_excel(writer, index=False)
+            st.session_state.edited_df.to_excel(writer, index=False)
 
         st.download_button(
             "📥 Download Updated Excel",
