@@ -1,69 +1,92 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
-st.set_page_config(page_title="Excel Column Mapper", layout="wide")
+st.set_page_config(page_title="Mapping Sheet Updater", layout="wide")
+st.title("Mapping Sheet Updater")
+st.caption("Get your mapping done in minutes")
 
-st.title("🧩 Excel Column Mapper")
-st.markdown("A clean, minimal tool to map values from a secondary Excel sheet to a new column in a primary sheet.")
+# --- File Upload ---
+uploaded_main = st.file_uploader("Upload Primary Excel File", type=[".xlsx"])
+uploaded_secondary = st.file_uploader("Upload Secondary Excel File", type=[".xlsx"])
 
-# Upload files
-st.sidebar.header("📁 Upload Excel Files")
-main_file = st.sidebar.file_uploader("Upload Primary Excel File", type="xlsx")
-secondary_file = st.sidebar.file_uploader("Upload Secondary Excel File", type="xlsx")
+# --- Session State ---
+if "df_main" not in st.session_state:
+    st.session_state.df_main = None
 
-# Load Excel files and list sheets
-if main_file:
-    main_excel = pd.ExcelFile(main_file)
-    main_sheet = st.sidebar.selectbox("Select Sheet from Primary", main_excel.sheet_names)
-    df_main = main_excel.parse(main_sheet)
-else:
-    df_main = None
+if "df_secondary" not in st.session_state:
+    st.session_state.df_secondary = None
 
-if secondary_file:
-    secondary_excel = pd.ExcelFile(secondary_file)
-    secondary_sheet = st.sidebar.selectbox("Select Sheet from Secondary", secondary_excel.sheet_names)
-    df_secondary = secondary_excel.parse(secondary_sheet)
-else:
-    df_secondary = None
+# --- Sheet Selector and Data Load ---
+def load_excel(file):
+    xls = pd.ExcelFile(file)
+    sheet = st.selectbox("Select Sheet", xls.sheet_names, key=str(file))
+    return pd.read_excel(xls, sheet_name=sheet)
 
-# Proceed only if both files are loaded
-if df_main is not None and df_secondary is not None:
-    st.success("✅ Both tables loaded successfully.")
+if uploaded_main:
+    st.session_state.df_main = load_excel(uploaded_main)
 
-    new_col_name = st.text_input("Enter new column name to add to primary table")
-    selected_secondary_column = st.selectbox("Select column from secondary table for dropdown values", df_secondary.columns)
+if uploaded_secondary:
+    st.session_state.df_secondary = load_excel(uploaded_secondary)
 
-    if new_col_name and selected_secondary_column:
-        dropdown_values = [""] + df_secondary[selected_secondary_column].dropna().unique().tolist()
-        selections = []
+# --- Column Mapping Interface ---
+if st.session_state.df_main is not None and st.session_state.df_secondary is not None:
+    st.markdown("---")
+    st.subheader("🛠️ Create New Column with Dropdown Values")
 
-        st.write(f"### 🧩 Assign values to new column: `{new_col_name}`")
+    new_col_name = st.text_input("New Column Name")
+    sec_col_options = st.session_state.df_secondary.columns.tolist()
+    sec_col_selected = st.selectbox("Choose Secondary Column for Dropdown Values", sec_col_options)
 
-        for i, row in df_main.iterrows():
-            col1, col2 = st.columns([3, 2])
-            with col1:
-                st.write(row.to_dict())
-            with col2:
-                choice = st.selectbox(
-                    f"Row {i + 1}",
-                    options=dropdown_values,
-                    key=f"dropdown_{i}"
-                )
-                selections.append(choice)
+    if new_col_name and sec_col_selected:
+        dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().unique().tolist()
 
-        if st.button("✅ Apply and Show Result"):
-            df_main[new_col_name] = selections
-            st.success(f"New column '{new_col_name}' added.")
-            st.dataframe(df_main)
+        edited_df = st.session_state.df_main.copy()
 
-            to_download = BytesIO()
-            df_main.to_excel(to_download, index=False)
-            to_download.seek(0)
+        if new_col_name not in edited_df.columns:
+            edited_df[new_col_name] = ""
 
-            st.download_button(
-                label="📥 Download Updated Excel File",
-                data=to_download,
-                file_name="updated_primary.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        edited_df.fillna("", inplace=True)
+
+        st.markdown("---")
+        st.subheader("📊 Interactive Table with Dropdowns")
+
+        hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
+        visible_df = edited_df.drop(columns=hide_columns)
+
+        gb = GridOptionsBuilder.from_dataframe(visible_df)
+        gb.configure_pagination(enabled=True)
+        gb.configure_default_column(editable=False, resizable=True)
+
+        gb.configure_column(new_col_name, editable=True, cellEditor="agSelectCellEditor", 
+                            cellEditorParams={"values": dropdown_values})
+
+        grid_options = gb.build()
+
+        grid_response = AgGrid(
+            visible_df,
+            gridOptions=grid_options,
+            update_mode=GridUpdateMode.VALUE_CHANGED,
+            fit_columns_on_grid_load=True,
+            enable_enterprise_modules=False,
+            height=500,
+            key="aggrid"
+        )
+
+        # Update the edited values back to the original df
+        updated_grid_df = grid_response["data"]
+        for col in updated_grid_df.columns:
+            edited_df[col] = updated_grid_df[col]
+
+        # --- Download Updated Excel ---
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            edited_df.to_excel(writer, index=False)
+
+        st.download_button(
+            "📥 Download Updated Excel",
+            data=buffer.getvalue(),
+            file_name="updated_mapping.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
