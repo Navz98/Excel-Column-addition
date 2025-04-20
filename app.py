@@ -42,8 +42,10 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
     if new_col_name and sec_col_selected:
         dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
 
-        if st.session_state.edited_df is None or new_col_name not in st.session_state.edited_df.columns:
+        if st.session_state.edited_df is None or not set(st.session_state.df_main.columns).issubset(st.session_state.edited_df.columns):
             st.session_state.edited_df = st.session_state.df_main.copy()
+
+        if new_col_name not in st.session_state.edited_df.columns:
             st.session_state.edited_df[new_col_name] = ""
 
         edited_df = st.session_state.edited_df.copy()
@@ -58,7 +60,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
 
         # --- Ag-Grid ---
         gb = GridOptionsBuilder.from_dataframe(visible_df)
-        gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)  # Enable filters on all columns
+        gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)
         gb.configure_grid_options(suppressMovableColumns=False)
 
         if new_col_name in visible_df.columns:
@@ -74,15 +76,16 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             visible_df,
             gridOptions=gb.build(),
             height=500,
-            update_mode=GridUpdateMode.VALUE_CHANGED,
+            update_mode=GridUpdateMode.MANUAL,
             allow_unsafe_jscode=True,
             fit_columns_on_grid_load=True,
             theme="streamlit"
         )
 
         # ✅ Properly update entire dataframe with all edits
-        for col in grid_response["data"].columns:
-            st.session_state.edited_df[col] = grid_response["data"][col]
+        updated_data = pd.DataFrame(grid_response["data"])
+        for col in updated_data.columns:
+            st.session_state.edited_df[col] = updated_data[col]
 
         # --- Download Excel ---
         buffer = BytesIO()
