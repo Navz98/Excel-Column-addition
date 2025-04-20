@@ -48,6 +48,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
 
         edited_df = st.session_state.edited_df.copy()
         edited_df.fillna("", inplace=True)
+        edited_df[new_col_name] = edited_df[new_col_name].astype(str)  # Ensure column is string
 
         st.markdown("---")
         st.subheader("📊 Table with Editable Dropdown Column")
@@ -63,10 +64,9 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         gb.configure_column(
             new_col_name,
             editable=True,
-            cellEditor="agRichSelectCellEditor",
+            cellEditor="agSelectCellEditor",
             cellEditorParams={
-                "values": dropdown_values,
-                "cellEditorPopup": True
+                "values": dropdown_values
             },
             singleClickEdit=True
         )
