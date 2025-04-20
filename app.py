@@ -81,14 +81,15 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             edited_df,
             gridOptions=gb.build(),
             height=500,
-            update_mode=GridUpdateMode.MANUAL,
+            update_mode=GridUpdateMode.VALUE_CHANGED,
             allow_unsafe_jscode=True,
             fit_columns_on_grid_load=True,
             theme="streamlit"
         )
 
         # ✅ Save updates to session
-        st.session_state.edited_df = pd.DataFrame(grid_response["data"])
+        updated_df = pd.DataFrame(grid_response["data"])
+        st.session_state.edited_df.update(updated_df)
 
         # --- Download Excel ---
         buffer = BytesIO()
