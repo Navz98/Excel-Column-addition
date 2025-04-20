@@ -14,11 +14,12 @@ uploaded_secondary = st.file_uploader("Upload Secondary Excel File", type=[".xls
 # --- Session State ---
 if "df_main" not in st.session_state:
     st.session_state.df_main = None
-
 if "df_secondary" not in st.session_state:
     st.session_state.df_secondary = None
+if "edited_df" not in st.session_state:
+    st.session_state.edited_df = None
 
-# --- Sheet Selector and Data Load ---
+# --- Load Excel Sheet ---
 def load_excel(file):
     xls = pd.ExcelFile(file)
     sheet = st.selectbox("Select Sheet", xls.sheet_names, key=str(file))
@@ -26,11 +27,10 @@ def load_excel(file):
 
 if uploaded_main:
     st.session_state.df_main = load_excel(uploaded_main)
-
 if uploaded_secondary:
     st.session_state.df_secondary = load_excel(uploaded_secondary)
 
-# --- Column Mapping Interface ---
+# --- Column Mapping UI ---
 if st.session_state.df_main is not None and st.session_state.df_secondary is not None:
     st.markdown("---")
     st.subheader("🛠️ Create New Column with Dropdown Values")
@@ -42,35 +42,27 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
     if new_col_name and sec_col_selected:
         dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
 
-        if "edited_df" not in st.session_state or new_col_name not in st.session_state.edited_df.columns:
+        if st.session_state.edited_df is None or new_col_name not in st.session_state.edited_df.columns:
             st.session_state.edited_df = st.session_state.df_main.copy()
             st.session_state.edited_df[new_col_name] = ""
 
         edited_df = st.session_state.edited_df.copy()
         edited_df.fillna("", inplace=True)
 
+        st.markdown("#### ✨ Suggested Values")
+        st.write(", ".join(dropdown_values))
+
         st.markdown("---")
-        st.subheader("📊 Table with Editable Dropdown Column")
+        st.subheader("📊 Editable Table (Type or Use Suggestions)")
 
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
         visible_df = edited_df.drop(columns=hide_columns)
 
-        # --- Configure Ag-Grid ---
+        # --- Ag-Grid ---
         gb = GridOptionsBuilder.from_dataframe(visible_df)
-        gb.configure_default_column(editable=False, resizable=True, sortable=True)
+        gb.configure_default_column(editable=True, resizable=True, sortable=True)
         gb.configure_grid_options(suppressMovableColumns=False)
-
-        # Editable dropdown in new column with fallback to text input
-        gb.configure_column(
-            new_col_name,
-            editable=True,
-            cellEditor="agRichSelectCellEditor",
-            cellEditorParams={
-                "values": dropdown_values,
-                "cellEditorPopup": True
-            },
-            singleClickEdit=True
-        )
+        gb.configure_column(new_col_name, editable=True, singleClickEdit=True)
 
         grid_response = AgGrid(
             visible_df,
@@ -82,10 +74,10 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             theme="streamlit"
         )
 
-        # Update edited_df with changes
+        # Save edits
         st.session_state.edited_df[visible_df.columns] = grid_response["data"]
 
-        # --- Download Updated Excel ---
+        # --- Download Excel ---
         buffer = BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
             st.session_state.edited_df.to_excel(writer, index=False)
