@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-import streamlit.components.v1 as components
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 st.set_page_config(page_title="Mapping Sheet Updater", layout="wide")
 st.title("Mapping Sheet Updater")
@@ -50,86 +50,45 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         edited_df.fillna("", inplace=True)
 
         st.markdown("---")
-        st.subheader("📊 Table with Inline Dropdowns")
+        st.subheader("📊 Table with Editable Dropdown Column")
 
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
+        visible_df = edited_df.drop(columns=hide_columns)
 
-        visible_columns = [col for col in edited_df.columns if col not in hide_columns]
+        # --- Configure Ag-Grid ---
+        gb = GridOptionsBuilder.from_dataframe(visible_df)
+        gb.configure_default_column(editable=False, resizable=True, sortable=True)
+        gb.configure_grid_options(suppressMovableColumns=False)
 
-        # JavaScript drag-and-drop + CSS for borders
-        components.html(f"""
-            <style>
-                .drag-table {{
-                    border-collapse: collapse;
-                    width: 100%;
-                }}
-                .drag-table th, .drag-table td {{
-                    border: 1px solid #ccc;
-                    padding: 8px;
-                    text-align: left;
-                }}
-                .drag-table th {{
-                    background-color: #f4f4f4;
-                    cursor: move;
-                }}
-            </style>
-            <script>
-                function enableDrag(tableId) {{
-                    const table = document.getElementById(tableId);
-                    let dragSrcEl;
+        # Editable dropdown in new column
+        gb.configure_column(
+            new_col_name,
+            editable=True,
+            cellEditor="agSelectCellEditor",
+            cellEditorParams={"values": dropdown_values}
+        )
 
-                    function handleDragStart(e) {{
-                        dragSrcEl = this;
-                        e.dataTransfer.effectAllowed = 'move';
-                        e.dataTransfer.setData('text/html', this.innerHTML);
-                    }}
+        grid_response = AgGrid(
+            visible_df,
+            gridOptions=gb.build(),
+            height=500,
+            update_mode=GridUpdateMode.VALUE_CHANGED,
+            allow_unsafe_jscode=True,
+            fit_columns_on_grid_load=True,
+            theme="streamlit"
+        )
 
-                    function handleDrop(e) {{
-                        if (dragSrcEl != this) {{
-                            dragSrcEl.innerHTML = this.innerHTML;
-                            this.innerHTML = e.dataTransfer.getData('text/html');
-                        }}
-                        return false;
-                    }}
-
-                    let cols = table.querySelectorAll("th");
-                    [].forEach.call(cols, function(col) {{
-                        col.setAttribute("draggable", true);
-                        col.addEventListener('dragstart', handleDragStart, false);
-                        col.addEventListener('drop', handleDrop, false);
-                    }});
-                }}
-                document.addEventListener("DOMContentLoaded", function() {{ enableDrag('drag-table'); }});
-            </script>
-        """, height=0)
-
-        # Render header row
-        header_html = "<table class='drag-table' id='drag-table'><thead><tr>"
-        for col in visible_columns:
-            header_html += f"<th>{col}</th>"
-        header_html += "</tr></thead><tbody>"
-
-        # Render rows
-        for i, row in edited_df.iterrows():
-            header_html += "<tr>"
-            for col in visible_columns:
-                if col == new_col_name:
-                    current_val = row[new_col_name] if row[new_col_name] in dropdown_values else ""
-                    select_html = f"<select name='dropdown_{i}' disabled>"
-                    for option in dropdown_values:
-                        selected = "selected" if option == current_val else ""
-                        select_html += f"<option value='{option}' {selected}>{option}</option>"
-                    select_html += "</select>"
-                    header_html += f"<td>{select_html}</td>"
-                else:
-                    header_html += f"<td>{str(row[col])}</td>"
-            header_html += "</tr>"
-        header_html += "</tbody></table>"
-
-        components.html(header_html, height=600, scrolling=True)
+        # Update edited_df with changes
+        edited_df[visible_df.columns] = grid_response["data"]
 
         # --- Download Updated Excel ---
         buffer = BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
             edited_df.to_excel(writer, index=False)
-        st.download_button("📥 Download Updated Excel", data=buffer.getvalue(), file_name="updated_mapping.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+        st.download_button(
+            "📥 Download Updated Excel",
+            data=buffer.getvalue(),
+            file_name="updated_mapping.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
