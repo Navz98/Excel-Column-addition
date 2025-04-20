@@ -42,23 +42,33 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().unique().tolist()
 
         edited_df = st.session_state.df_main.copy()
-        edited_df[new_col_name] = ""
 
-        for i in range(len(edited_df)):
-            current_value = st.selectbox(
-                f"Row {i+1} - Select value for '{new_col_name}'",
-                options=dropdown_values,
-                key=f"dropdown_{i}"
-            )
-            edited_df.at[i, new_col_name] = current_value
+        if new_col_name not in edited_df.columns:
+            edited_df[new_col_name] = ""
 
         st.markdown("---")
-        st.subheader("📊 Final Table")
+        st.subheader("📊 Table with Inline Dropdowns")
 
-        # Display table with hideable columns
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
-        df_display = edited_df.drop(columns=hide_columns)
-        st.dataframe(df_display, use_container_width=True)
+
+        table = []
+        for i, row in edited_df.iterrows():
+            cols = st.columns(len(edited_df.columns) - (1 if new_col_name in hide_columns else 0))
+            col_idx = 0
+            for col_name in edited_df.columns:
+                if col_name in hide_columns:
+                    continue
+                if col_name == new_col_name:
+                    new_val = cols[col_idx].selectbox(
+                        label=f"Row {i+1} - {new_col_name}",
+                        options=dropdown_values,
+                        index=dropdown_values.index(row[new_col_name]) if row[new_col_name] in dropdown_values else 0,
+                        key=f"row_{i}_{new_col_name}"
+                    )
+                    edited_df.at[i, new_col_name] = new_val
+                else:
+                    cols[col_idx].write(row[col_name])
+                col_idx += 1
 
         # --- Download Updated Excel ---
         buffer = BytesIO()
