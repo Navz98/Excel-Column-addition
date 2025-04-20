@@ -49,20 +49,27 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         edited_df = st.session_state.edited_df.copy()
         edited_df.fillna("", inplace=True)
 
-        st.markdown("#### ✨ Suggested Values")
-        st.write(", ".join(dropdown_values))
-
         st.markdown("---")
-        st.subheader("📊 Editable Table (Type or Use Suggestions)")
+        st.subheader("📊 Table with Editable Dropdown Column")
 
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
         visible_df = edited_df.drop(columns=hide_columns)
 
         # --- Ag-Grid ---
         gb = GridOptionsBuilder.from_dataframe(visible_df)
-        gb.configure_default_column(editable=True, resizable=True, sortable=True)
+        gb.configure_default_column(editable=False, resizable=True, sortable=True)
         gb.configure_grid_options(suppressMovableColumns=False)
-        gb.configure_column(new_col_name, editable=True, singleClickEdit=True)
+
+        gb.configure_column(
+            new_col_name,
+            editable=True,
+            cellEditor="agRichSelectCellEditor",
+            cellEditorParams={
+                "values": dropdown_values,
+                "cellEditorPopup": True
+            },
+            singleClickEdit=True
+        )
 
         grid_response = AgGrid(
             visible_df,
