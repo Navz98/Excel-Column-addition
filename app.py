@@ -48,7 +48,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         edited_df[new_col_name] = edited_df[new_col_name].astype(str)
 
         st.markdown("---")
-        st.subheader("📊 Table with Editable Dropdown Column")
+        st.subheader("📊 Interactive Table with Dropdown Selection")
 
         # --- Hide Columns ---
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
@@ -57,47 +57,39 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         gb = GridOptionsBuilder.from_dataframe(edited_df)
         gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)
 
-        # Enable dropdown in the new column with autocomplete support
+        # Enable dropdown with editable cells
         gb.configure_column(
             new_col_name,
             editable=True,
-            cellEditor="agRichSelectCellEditor",
-            cellEditorParams={
-                "values": dropdown_values,
-                "searchable": True
-            },
-            singleClickEdit=True,
+            cellEditor="agSelectCellEditor",  # regular dropdown
+            cellEditorParams={"values": dropdown_values},
             filter=True
-        )
-
-        # Enable drag-and-drop for columns
-        gb.configure_grid_options(
-            suppressMovableColumns=False,
-            rowStyle={'style': {'border': '1px solid #ccc'}},
-            rowClassRules={
-                "striped-row": "true"
-            }
         )
 
         for col in hide_columns:
             gb.configure_column(col, hide=True)
+
+        # Allow drag-drop, sorting, and styling
+        gb.configure_grid_options(
+            suppressMovableColumns=False,
+            enableCellTextSelection=True
+        )
 
         grid_response = AgGrid(
             edited_df,
             gridOptions=gb.build(),
             height=600,
             update_mode=GridUpdateMode.VALUE_CHANGED,
-            data_return_mode='AS_INPUT',
+            data_return_mode="AS_INPUT",
             allow_unsafe_jscode=True,
             fit_columns_on_grid_load=True,
-            enable_enterprise_modules=False,
             theme="streamlit"
         )
 
-        # ✅ Store edits for export
+        # ✅ Export updated data
         updated_df = pd.DataFrame(grid_response["data"])
 
-        # --- Download Excel ---
+        # --- Download Updated Excel ---
         buffer = BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
             updated_df.to_excel(writer, index=False)
