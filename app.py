@@ -16,6 +16,8 @@ if "df_main" not in st.session_state:
     st.session_state.df_main = None
 if "df_secondary" not in st.session_state:
     st.session_state.df_secondary = None
+if "updated_df" not in st.session_state:
+    st.session_state.updated_df = None
 
 # --- Load Excel Sheet ---
 def load_excel(file):
@@ -40,12 +42,10 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
     if new_col_name and sec_col_selected:
         dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
 
-        # Create a working copy of the main data
         edited_df = st.session_state.df_main.copy()
         dropdown_col = f"{new_col_name} (Dropdown)"
         manual_col = f"{new_col_name} (Manual)"
 
-        # Add the new editable columns if they don't exist
         if dropdown_col not in edited_df.columns:
             edited_df[dropdown_col] = ""
         if manual_col not in edited_df.columns:
@@ -56,15 +56,14 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         st.markdown("---")
         st.subheader("📊 Editable Table")
 
-        # Hide column selection
+        # Hide columns option
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
 
-        # AgGrid configuration
+        # Configure AgGrid
         gb = GridOptionsBuilder.from_dataframe(edited_df)
         gb.configure_default_column(editable=True, resizable=True, sortable=True, filter=True)
         gb.configure_grid_options(suppressMovableColumns=False)
 
-        # Configure dropdown column
         gb.configure_column(
             dropdown_col,
             editable=True,
@@ -73,44 +72,46 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             singleClickEdit=True,
             filter=True,
         )
-
-        # Allow manual input column (default editable)
         gb.configure_column(manual_col, editable=True, filter=True)
 
-        # Hide any selected columns
         for col in hide_columns:
             gb.configure_column(col, hide=True)
 
-        # Show AgGrid
         grid_response = AgGrid(
             edited_df,
             gridOptions=gb.build(),
             height=500,
             update_mode=GridUpdateMode.VALUE_CHANGED,
-            data_return_mode='AS_INPUT',
-            allow_unsafe_jscode=True,  # Required for custom editors
+            data_return_mode="AS_INPUT",
+            allow_unsafe_jscode=True,
             fit_columns_on_grid_load=True,
             theme="streamlit"
         )
 
         updated_df = pd.DataFrame(grid_response["data"])
 
-        # Combine the dropdown + manual input
-        combined = updated_df[dropdown_col].astype(str).str.strip() + ", " + updated_df[manual_col].astype(str).str.strip()
-        combined = combined.str.strip(", ")
+        # Update button to confirm changes
+        if st.button("✅ Update Table"):
+            # Combine dropdown + manual input
+            combined = updated_df[dropdown_col].astype(str).str.strip() + ", " + updated_df[manual_col].astype(str).str.strip()
+            combined = combined.str.strip(", ")
 
-        # Prepare final Excel
-        export_df = st.session_state.df_main.copy()
-        export_df[new_col_name] = combined
+            # Build export table
+            export_df = st.session_state.df_main.copy()
+            export_df[new_col_name] = combined
 
-        # --- Download Excel ---
-        buffer = BytesIO()
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            export_df.to_excel(writer, index=False)
+            st.session_state.updated_df = export_df
+            st.success("Table updated successfully!")
 
-        st.download_button(
-            "📥 Download Updated Excel",
-            data=buffer.getvalue(),
-            file_name="updated_mapping.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        # Download button only after update
+        if st.session_state.updated_df is not None:
+            buffer = BytesIO()
+            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+                st.session_state.updated_df.to_excel(writer, index=False)
+
+            st.download_button(
+                "📥 Download Updated Excel",
+                data=buffer.getvalue(),
+                file_name="updated_mapping.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
