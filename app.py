@@ -40,10 +40,12 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
     if new_col_name and sec_col_selected:
         dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
 
+        # Create a working copy of the main data
         edited_df = st.session_state.df_main.copy()
         dropdown_col = f"{new_col_name} (Dropdown)"
         manual_col = f"{new_col_name} (Manual)"
 
+        # Add the new editable columns if they don't exist
         if dropdown_col not in edited_df.columns:
             edited_df[dropdown_col] = ""
         if manual_col not in edited_df.columns:
@@ -54,49 +56,52 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         st.markdown("---")
         st.subheader("📊 Editable Table")
 
-        # --- Hide columns ---
+        # Hide column selection
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
 
-        # --- AgGrid Setup ---
+        # AgGrid configuration
         gb = GridOptionsBuilder.from_dataframe(edited_df)
         gb.configure_default_column(editable=True, resizable=True, sortable=True, filter=True)
         gb.configure_grid_options(suppressMovableColumns=False)
 
+        # Configure dropdown column
         gb.configure_column(
             dropdown_col,
             editable=True,
-            cellEditor="agRichSelectCellEditor",
+            cellEditor="agSelectCellEditor",
             cellEditorParams={"values": dropdown_values},
             singleClickEdit=True,
             filter=True,
         )
 
+        # Allow manual input column (default editable)
+        gb.configure_column(manual_col, editable=True, filter=True)
+
+        # Hide any selected columns
         for col in hide_columns:
             gb.configure_column(col, hide=True)
 
+        # Show AgGrid
         grid_response = AgGrid(
             edited_df,
             gridOptions=gb.build(),
             height=500,
             update_mode=GridUpdateMode.VALUE_CHANGED,
             data_return_mode='AS_INPUT',
-            allow_unsafe_jscode=True,
+            allow_unsafe_jscode=True,  # Required for custom editors
             fit_columns_on_grid_load=True,
             theme="streamlit"
         )
 
         updated_df = pd.DataFrame(grid_response["data"])
 
-        # Combine the columns
-        combined_values = updated_df[dropdown_col].astype(str).str.strip()
-        manual_values = updated_df[manual_col].astype(str).str.strip()
+        # Combine the dropdown + manual input
+        combined = updated_df[dropdown_col].astype(str).str.strip() + ", " + updated_df[manual_col].astype(str).str.strip()
+        combined = combined.str.strip(", ")
 
-        combined_column = combined_values + ", " + manual_values
-        combined_column = combined_column.str.strip(", ")  # Remove dangling commas
-
-        # Final export dataframe
+        # Prepare final Excel
         export_df = st.session_state.df_main.copy()
-        export_df[new_col_name] = combined_column
+        export_df[new_col_name] = combined
 
         # --- Download Excel ---
         buffer = BytesIO()
