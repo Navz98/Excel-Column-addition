@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 st.set_page_config(page_title="Mapping Sheet Updater", layout="wide")
 st.title("Mapping Sheet Updater")
@@ -27,10 +28,10 @@ if uploaded_main:
 if uploaded_secondary:
     st.session_state.df_secondary = load_excel(uploaded_secondary)
 
-# --- Mapping UI ---
+# --- Column Mapping UI ---
 if st.session_state.df_main is not None and st.session_state.df_secondary is not None:
     st.markdown("---")
-    st.subheader("🛠️ Create New Column with Dropdown Values")
+    st.subheader("🛠️ Create New Column with Dropdown + Manual Entry")
 
     new_col_name = st.text_input("New Column Name")
     sec_col_options = st.session_state.df_secondary.columns.tolist()
@@ -46,45 +47,55 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         edited_df.fillna("", inplace=True)
         edited_df[new_col_name] = edited_df[new_col_name].astype(str)
 
-        # --- Column Hiding ---
-        st.markdown("### 👀 Hide Columns")
-        hide_columns = st.multiselect("Select columns to hide", options=edited_df.columns.tolist())
-        visible_columns = [col for col in edited_df.columns if col not in hide_columns]
-
         st.markdown("---")
-        st.subheader("📋 Editable Table")
+        st.subheader("📊 Table with Editable Dropdown + Manual Entry Column")
 
-        # Render column headers
-        header_cols = st.columns(len(visible_columns))
-        for i, col in enumerate(visible_columns):
-            header_cols[i].markdown(f"**{col}**")
+        # --- Hide columns ---
+        hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
 
-        # Render table rows
-        for i, row in edited_df.iterrows():
-            row_cols = st.columns(len(visible_columns))
-            for j, col in enumerate(visible_columns):
-                if col == new_col_name:
-                    current_val = row[new_col_name] if row[new_col_name] in dropdown_values else ""
-                    selected = row_cols[j].selectbox(
-                        label="",
-                        options=dropdown_values,
-                        index=dropdown_values.index(current_val),
-                        key=f"{i}_{col}"
-                    )
-                    edited_df.at[i, new_col_name] = selected
-                else:
-                    row_cols[j].markdown(str(row[col]))
+        # --- AgGrid Setup ---
+        gb = GridOptionsBuilder.from_dataframe(edited_df)
+        gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)
+        gb.configure_grid_options(suppressMovableColumns=False)
+
+        # Editable dropdown with manual entry support
+        gb.configure_column(
+            new_col_name,
+            editable=True,
+            cellEditor="agRichSelectCellEditor",
+            cellEditorParams={
+                "values": dropdown_values,
+                "cellHeight": 40,
+                "searchable": True
+            },
+            singleClickEdit=True,
+            filter=True
+        )
+
+        # Hide selected columns
+        for col in hide_columns:
+            gb.configure_column(col, hide=True)
+
+        grid_response = AgGrid(
+            edited_df,
+            gridOptions=gb.build(),
+            height=500,
+            update_mode=GridUpdateMode.VALUE_CHANGED,
+            data_return_mode='AS_INPUT',
+            allow_unsafe_jscode=True,
+            fit_columns_on_grid_load=True,
+            theme="streamlit"
+        )
+
+        updated_df = pd.DataFrame(grid_response["data"])
 
         # --- Download Excel ---
-        st.markdown("---")
-        st.subheader("📥 Download Updated Excel")
-
         buffer = BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            edited_df.to_excel(writer, index=False)
+            updated_df.to_excel(writer, index=False)
 
         st.download_button(
-            label="Download Excel File",
+            "📥 Download Updated Excel",
             data=buffer.getvalue(),
             file_name="updated_mapping.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
