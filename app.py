@@ -40,7 +40,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
     sec_col_selected = st.selectbox("Choose Secondary Column for Dropdown Values", sec_col_options)
 
     if new_col_base and sec_col_selected:
-        dropdown_values = ["" ] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
+        dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
 
         df_main = st.session_state.df_main.copy()
         dropdown_col = f"{new_col_base}_Dropdown"
@@ -66,7 +66,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         gb.configure_column(
             dropdown_col,
             editable=True,
-            cellEditor="agRichSelectCellEditor",
+            cellEditor="agSelectCellEditor",
             cellEditorParams={"values": dropdown_values},
             singleClickEdit=True,
             filter=True
