@@ -31,7 +31,7 @@ if uploaded_secondary:
 # --- Column Mapping UI ---
 if st.session_state.df_main is not None and st.session_state.df_secondary is not None:
     st.markdown("---")
-    st.subheader("🛠️ Create New Column with Dropdown + Manual Entry")
+    st.subheader("🛠️ Create New Column with Dropdown and Manual Input")
 
     new_col_name = st.text_input("New Column Name")
     sec_col_options = st.session_state.df_secondary.columns.tolist()
@@ -41,38 +41,36 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
 
         edited_df = st.session_state.df_main.copy()
-        if new_col_name not in edited_df.columns:
-            edited_df[new_col_name] = ""
+        dropdown_col = f"{new_col_name} (Dropdown)"
+        manual_col = f"{new_col_name} (Manual)"
+
+        if dropdown_col not in edited_df.columns:
+            edited_df[dropdown_col] = ""
+        if manual_col not in edited_df.columns:
+            edited_df[manual_col] = ""
 
         edited_df.fillna("", inplace=True)
-        edited_df[new_col_name] = edited_df[new_col_name].astype(str)
 
         st.markdown("---")
-        st.subheader("📊 Table with Editable Dropdown + Manual Entry Column")
+        st.subheader("📊 Editable Table")
 
         # --- Hide columns ---
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
 
         # --- AgGrid Setup ---
         gb = GridOptionsBuilder.from_dataframe(edited_df)
-        gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)
+        gb.configure_default_column(editable=True, resizable=True, sortable=True, filter=True)
         gb.configure_grid_options(suppressMovableColumns=False)
 
-        # Editable dropdown with manual entry support
         gb.configure_column(
-            new_col_name,
+            dropdown_col,
             editable=True,
             cellEditor="agRichSelectCellEditor",
-            cellEditorParams={
-                "values": dropdown_values,
-                "cellHeight": 40,
-                "searchable": True
-            },
+            cellEditorParams={"values": dropdown_values},
             singleClickEdit=True,
-            filter=True
+            filter=True,
         )
 
-        # Hide selected columns
         for col in hide_columns:
             gb.configure_column(col, hide=True)
 
@@ -89,10 +87,21 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
 
         updated_df = pd.DataFrame(grid_response["data"])
 
+        # Combine the columns
+        combined_values = updated_df[dropdown_col].astype(str).str.strip()
+        manual_values = updated_df[manual_col].astype(str).str.strip()
+
+        combined_column = combined_values + ", " + manual_values
+        combined_column = combined_column.str.strip(", ")  # Remove dangling commas
+
+        # Final export dataframe
+        export_df = st.session_state.df_main.copy()
+        export_df[new_col_name] = combined_column
+
         # --- Download Excel ---
         buffer = BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            updated_df.to_excel(writer, index=False)
+            export_df.to_excel(writer, index=False)
 
         st.download_button(
             "📥 Download Updated Excel",
