@@ -62,7 +62,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)
         gb.configure_grid_options(suppressMovableColumns=False)
 
-        # Configure editable dropdown column
+        # ✅ Dropdown column with real dropdown UI
         gb.configure_column(
             dropdown_col,
             editable=True,
@@ -72,7 +72,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             filter=True
         )
 
-        # Configure manual input column
+        # ✅ Manual input as free text
         gb.configure_column(manual_col, editable=True, filter=True)
 
         for col in hide_columns:
