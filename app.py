@@ -62,7 +62,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)
         gb.configure_grid_options(suppressMovableColumns=False)
 
-        # ✅ Dropdown column with real dropdown UI
+        # ✅ Dropdown column with UI
         gb.configure_column(
             dropdown_col,
             editable=True,
@@ -72,7 +72,7 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             filter=True
         )
 
-        # ✅ Manual input as free text
+        # ✅ Manual input
         gb.configure_column(manual_col, editable=True, filter=True)
 
         for col in hide_columns:
@@ -89,7 +89,6 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
             theme="streamlit"
         )
 
-        # Save updated edits
         edited_df = pd.DataFrame(grid_response["data"])
 
         if st.button("✅ Update and Preview Final Column"):
@@ -103,9 +102,13 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         st.markdown("### ✅ Final Output Preview")
         st.dataframe(st.session_state.final_df)
 
+        # ⚡ Export only the final table (hide helper columns)
+        export_df = st.session_state.final_df.copy()
+        export_df = export_df.drop(columns=[f"{new_col_base}_Dropdown", f"{new_col_base}_Manual"], errors="ignore")
+
         buffer = BytesIO()
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            st.session_state.final_df.to_excel(writer, index=False)
+            export_df.to_excel(writer, index=False)
 
         st.download_button(
             "📥 Download Final Excel",
