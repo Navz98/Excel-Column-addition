@@ -16,8 +16,8 @@ if "df_main" not in st.session_state:
     st.session_state.df_main = None
 if "df_secondary" not in st.session_state:
     st.session_state.df_secondary = None
-if "updated_df" not in st.session_state:
-    st.session_state.updated_df = None
+if "final_df" not in st.session_state:
+    st.session_state.final_df = None
 
 # --- Load Excel Sheet ---
 def load_excel(file):
@@ -33,85 +33,83 @@ if uploaded_secondary:
 # --- Column Mapping UI ---
 if st.session_state.df_main is not None and st.session_state.df_secondary is not None:
     st.markdown("---")
-    st.subheader("🛠️ Create New Column with Dropdown and Manual Input")
+    st.subheader("🛠️ Map Column with Dropdown + Manual Input")
 
-    new_col_name = st.text_input("New Column Name")
+    new_col_base = st.text_input("Base Column Name (for Dropdown + Manual Input)")
     sec_col_options = st.session_state.df_secondary.columns.tolist()
     sec_col_selected = st.selectbox("Choose Secondary Column for Dropdown Values", sec_col_options)
 
-    if new_col_name and sec_col_selected:
-        dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
+    if new_col_base and sec_col_selected:
+        dropdown_values = ["" ] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
 
-        edited_df = st.session_state.df_main.copy()
-        dropdown_col = f"{new_col_name} (Dropdown)"
-        manual_col = f"{new_col_name} (Manual)"
+        df_main = st.session_state.df_main.copy()
+        dropdown_col = f"{new_col_base}_Dropdown"
+        manual_col = f"{new_col_base}_Manual"
+        final_col = new_col_base
 
-        if dropdown_col not in edited_df.columns:
-            edited_df[dropdown_col] = ""
-        if manual_col not in edited_df.columns:
-            edited_df[manual_col] = ""
+        for col in [dropdown_col, manual_col]:
+            if col not in df_main.columns:
+                df_main[col] = ""
 
-        edited_df.fillna("", inplace=True)
+        df_main[dropdown_col] = df_main[dropdown_col].astype(str)
+        df_main[manual_col] = df_main[manual_col].astype(str)
 
-        st.markdown("---")
-        st.subheader("📊 Editable Table")
+        # --- Hide Columns ---
+        hide_columns = st.multiselect("Hide Columns", options=df_main.columns.tolist())
 
-        # Hide columns option
-        hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
-
-        # Configure AgGrid
-        gb = GridOptionsBuilder.from_dataframe(edited_df)
-        gb.configure_default_column(editable=True, resizable=True, sortable=True, filter=True)
+        # --- AgGrid Setup ---
+        gb = GridOptionsBuilder.from_dataframe(df_main)
+        gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)
         gb.configure_grid_options(suppressMovableColumns=False)
 
+        # Configure editable dropdown column
         gb.configure_column(
             dropdown_col,
             editable=True,
-            cellEditor="agSelectCellEditor",
+            cellEditor="agRichSelectCellEditor",
             cellEditorParams={"values": dropdown_values},
             singleClickEdit=True,
-            filter=True,
+            filter=True
         )
+
+        # Configure manual input column
         gb.configure_column(manual_col, editable=True, filter=True)
 
         for col in hide_columns:
             gb.configure_column(col, hide=True)
 
         grid_response = AgGrid(
-            edited_df,
+            df_main,
             gridOptions=gb.build(),
             height=500,
             update_mode=GridUpdateMode.VALUE_CHANGED,
-            data_return_mode="AS_INPUT",
+            data_return_mode='AS_INPUT',
             allow_unsafe_jscode=True,
             fit_columns_on_grid_load=True,
             theme="streamlit"
         )
 
-        updated_df = pd.DataFrame(grid_response["data"])
+        # Save updated edits
+        edited_df = pd.DataFrame(grid_response["data"])
 
-        # Update button to confirm changes
-        if st.button("✅ Update Table"):
-            # Combine dropdown + manual input
-            combined = updated_df[dropdown_col].astype(str).str.strip() + ", " + updated_df[manual_col].astype(str).str.strip()
-            combined = combined.str.strip(", ")
-
-            # Build export table
-            export_df = st.session_state.df_main.copy()
-            export_df[new_col_name] = combined
-
-            st.session_state.updated_df = export_df
-            st.success("Table updated successfully!")
-
-        # Download button only after update
-        if st.session_state.updated_df is not None:
-            buffer = BytesIO()
-            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-                st.session_state.updated_df.to_excel(writer, index=False)
-
-            st.download_button(
-                "📥 Download Updated Excel",
-                data=buffer.getvalue(),
-                file_name="updated_mapping.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        if st.button("✅ Update and Preview Final Column"):
+            edited_df[final_col] = edited_df[[dropdown_col, manual_col]].apply(
+                lambda row: ', '.join(filter(None, [row[dropdown_col].strip(), row[manual_col].strip()])), axis=1
             )
+            st.session_state.final_df = edited_df
+
+    # --- Download Final Output ---
+    if st.session_state.final_df is not None:
+        st.markdown("### ✅ Final Output Preview")
+        st.dataframe(st.session_state.final_df)
+
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            st.session_state.final_df.to_excel(writer, index=False)
+
+        st.download_button(
+            "📥 Download Final Excel",
+            data=buffer.getvalue(),
+            file_name="updated_mapping.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
