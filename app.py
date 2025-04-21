@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 st.set_page_config(page_title="Mapping Sheet Updater", layout="wide")
 st.title("Mapping Sheet Updater")
@@ -42,55 +41,40 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
     if new_col_name and sec_col_selected:
         dropdown_values = [""] + st.session_state.df_secondary[sec_col_selected].dropna().astype(str).unique().tolist()
 
-        if st.session_state.edited_df is None or not set(st.session_state.df_main.columns).issubset(st.session_state.edited_df.columns):
-            st.session_state.edited_df = st.session_state.df_main.copy()
+        edited_df = st.session_state.df_main.copy()
+        if new_col_name not in edited_df.columns:
+            edited_df[new_col_name] = ""
 
-        if new_col_name not in st.session_state.edited_df.columns:
-            st.session_state.edited_df[new_col_name] = ""
-
-        edited_df = st.session_state.edited_df.copy()
         edited_df.fillna("", inplace=True)
-        edited_df[new_col_name] = edited_df[new_col_name].astype(str)
 
         st.markdown("---")
-        st.subheader("📊 Table with Editable Dropdown Column")
+        st.subheader("📊 Table with Inline Dropdowns")
 
-        # --- Hide columns selection ---
         hide_columns = st.multiselect("Hide Columns", options=edited_df.columns.tolist())
+        visible_columns = [col for col in edited_df.columns if col not in hide_columns]
 
-        # --- Configure Ag-Grid ---
-        gb = GridOptionsBuilder.from_dataframe(edited_df)
-        gb.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)
-        gb.configure_grid_options(suppressMovableColumns=False)
+        # Render header
+        header_cols = st.columns(len(visible_columns))
+        for i, col_name in enumerate(visible_columns):
+            header_cols[i].markdown(f"**{col_name}**")
 
-        # Set dropdown column as editable with dropdown options
-        if new_col_name in edited_df.columns:
-            gb.configure_column(
-                new_col_name,
-                editable=True,
-                cellEditor="agSelectCellEditor",
-                cellEditorParams={"values": dropdown_values},
-                singleClickEdit=True
-            )
+        # Render rows with dropdowns in the new column
+        for i, row in edited_df.iterrows():
+            cols = st.columns(len(visible_columns))
+            for j, col_name in enumerate(visible_columns):
+                if col_name == new_col_name:
+                    current_val = row[new_col_name]
+                    new_val = cols[j].selectbox(
+                        label="",
+                        options=dropdown_values,
+                        index=dropdown_values.index(current_val) if current_val in dropdown_values else 0,
+                        key=f"row_{i}_{col_name}",
+                    )
+                    edited_df.at[i, new_col_name] = new_val
+                else:
+                    cols[j].write(str(row[col_name]))
 
-        # Apply column hiding
-        for col in hide_columns:
-            gb.configure_column(col, hide=True)
-
-        grid_response = AgGrid(
-            edited_df,
-            gridOptions=gb.build(),
-            height=500,
-            update_mode=GridUpdateMode.MANUAL,
-            data_return_mode='AS_INPUT',
-            allow_unsafe_jscode=True,
-            fit_columns_on_grid_load=True,
-            theme="streamlit"
-        )
-
-        # ✅ Save updates to session
-        updated_df = pd.DataFrame(grid_response["data"])
-        st.session_state.edited_df = updated_df.copy()
+        st.session_state.edited_df = edited_df
 
         # --- Download Excel ---
         buffer = BytesIO()
