@@ -66,3 +66,41 @@ if st.session_state.df_main is not None and st.session_state.df_secondary is not
         gb.configure_column(
             new_col_name,
             editable=True,
+            cellEditor="agRichSelectCellEditor",
+            cellEditorParams={"values": dropdown_values},
+            singleClickEdit=True,
+            filter=True
+        )
+
+        # Hide selected columns
+        for col in hide_columns:
+            gb.configure_column(col, hide=True)
+
+        # Enable column drag-and-drop
+        gb.configure_grid_options(suppressMovableColumns=False)
+
+        grid_response = AgGrid(
+            edited_df,
+            gridOptions=gb.build(),
+            update_mode=GridUpdateMode.VALUE_CHANGED,
+            data_return_mode="AS_INPUT",
+            allow_unsafe_jscode=True,
+            height=600,
+            fit_columns_on_grid_load=True,
+            theme="streamlit"
+        )
+
+        # Save edited data
+        updated_df = pd.DataFrame(grid_response["data"])
+
+        # --- Download updated Excel ---
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            updated_df.to_excel(writer, index=False)
+
+        st.download_button(
+            "📥 Download Updated Excel",
+            data=buffer.getvalue(),
+            file_name="updated_mapping.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
